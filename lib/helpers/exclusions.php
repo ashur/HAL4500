@@ -3,23 +3,45 @@
 function getExclusions()
 {
 	$exclusions = [
-		'/',
-		'aids',
-		'bernardino',
-		'bitches',
+		'abus',
+		'bitch',
 		'black',
 		'dead',
 		'died',
 		'dies',
-		'divorce',
-		'donald',
 		'hitler',
+		'hobo',
 		'homo',
+		'inmate',
+		'jew',
 		'kill',
 		'nazi',
+		'nigg',
 		'prison',
 		'rape',
-		'slavery',
+		'rip',
+		'shoot',
+		'slave',
+
+		// Diseases
+		'aids',
+		'alcoholism',
+		'cancer',
+		'hiv',
+		'insane',
+
+		// Too easy to make light of tragic events
+		'bernardino',
+		'central park five',
+		'massacre',
+		'newtown',
+
+		// Too personal, or breaks illusion
+		'kottke',
+		'minna',
+		'ollie',
+
+		'/',
 		'sponsor',
 	];
 
