@@ -10,6 +10,8 @@ use Cranberry\Core\Utils;
 
 class Bot
 {
+	use \Cranberry\Bot\History\Bot;
+
 	/**
 	 * @var	array
 	 */
@@ -39,9 +41,9 @@ class Bot
 		{
 			$currentWord = str_replace( '\\', '', $currentWord );
 
-			$pattern = "/(\s|^){$currentWord}\s([^\s]*)/m";
+			$pattern = "/(\s|\-|^){$currentWord}\s([^\s]*)/m";
 			$headlinesString = str_replace( '’', '\'', $this->headlinesString );
-			preg_match_all( $pattern, $headlinesString, $matches );
+			@preg_match_all( $pattern, $headlinesString, $matches );
 
 			if( !isset( $matches[2] ) || count( $matches[2] ) == 0 )
 			{
@@ -85,49 +87,72 @@ class Bot
 	}
 
 	/**
+ 	 * @param	string	$string
+	 * @return	string
+	 */
+	public function getNormalizedString( $string )
+	{
+		$normalizedString = String::strtolower( $string );
+
+		$removees = [ '\'', '"', '‘', '’', '\\', '.', '*', '$' ];
+		$normalizedString = str_replace( $removees, '', $normalizedString, $count );
+
+		return $normalizedString;
+	}
+
+	/**
 	 * @return	string
 	 */
 	public function getSentence()
 	{
 		/* Lines */
-		$baddies = ['.', '?', '(', ')', '*', '-', '+', '[', ']', '\\', '/', '?'];
-
-		$words = [];
-		$nextWord = '';
-		$attempts = 0;
+		$escapees = ['.', '-', '+', '[', ']', '\\', '/'];
+		$removees = ['"', '(', ')', '?', '|', '*', ',.'];	// Note: ',.' is an old typo on Kottke's feed
 
 		do
 		{
-			$nextWord = $this->getNextWord( $nextWord );
+			$words = [];
+			$nextWord = '';
 
-			foreach( $baddies as $baddie )
-			{
-				$nextWord = str_replace( $baddie, "\\{$baddie}", $nextWord );
-			}
+			$wordAttempts = 0;
+			$shouldUseSentence = true;
 
-			$attempts++;
-			if( $attempts >= 10 )
+			do
 			{
-				return '';
-			}
+				$nextWord = $this->getNextWord( $nextWord );
 
-			if( $nextWord != false )
-			{
+				if( $nextWord == false )
+				{
+					break;
+				}
+
+				foreach( $escapees as $escapee )
+				{
+					$nextWord = str_replace( $escapee, "\\{$escapee}", $nextWord );
+				}
+				foreach( $removees as $removee )
+				{
+					$nextWord = str_replace( $removee, '', $nextWord );
+				}
+
 				$words[] = $nextWord;
 			}
-		}
-		while( $nextWord != false );
+			while( $wordAttempts <= 10 );
 
-		foreach( $words as &$word )
-		{
-			if( substr( $word, -1 ) == '\'' )
-			{
-				$word = substr( $word, 0, strlen( $word ) - 1 );
-			}
-		}
+			$sentence = implode( ' ', $words );
+			$sentence = String::ucwords( $sentence );
 
-		$sentence = implode( ' ', $words );
-		$sentence = String::ucfirst( $sentence );
+			$shouldUseSentence = $shouldUseSentence && !$this->history->domainEntryExists( 'titles', $sentence );
+			$shouldUseSentence = $shouldUseSentence && !$this->stringExistsInHeadlines( $sentence );
+
+			/* Length */
+			$shouldUseSentence = $shouldUseSentence && substr_count( $sentence, ' ' ) >= 2;
+			$shouldUseSentence = $shouldUseSentence && substr_count( $sentence, ' ' ) <= 5;
+			$shouldUseSentence = $shouldUseSentence && strlen( $sentence ) <= 140;
+		}
+		while( !$shouldUseSentence );
+
+		$this->history->addDomainEntry( 'titles', $sentence );
 
 		return $sentence;
 	}
@@ -145,8 +170,21 @@ class Bot
 	 */
 	public function setHeadlines( array $headlines )
 	{
-		$this->headlines = $headlines;
-		$this->headlinesString = implode( PHP_EOL . PHP_EOL, $headlines );
+		foreach( $headlines as $headline )
+		{
+			$headlineNormalized = html_entity_decode( $headline, ENT_COMPAT | ENT_XML1 );
+			$headlineNormalized = str_replace( '&apos;', '’', $headlineNormalized );
+
+			/* Truncated feed titles are a bummer */
+			if( substr( $headlineNormalized, -3 ) == '...' )
+			{
+				$headlineNormalized = substr( $headlineNormalized, 0, strrpos( $headlineNormalized, ' ' ) );
+			}
+
+			$this->headlines[] = $headlineNormalized;
+		}
+
+		$this->headlinesString = implode( PHP_EOL . PHP_EOL, $this->headlines );
 	}
 
 	/**
@@ -155,29 +193,27 @@ class Bot
 	 */
 	public function stringExistsInHeadlines( $string )
 	{
-		$normalizedString = String::strtolower( $string );
-		$normalizedString = str_replace( '‘', '', $normalizedString );
-		$normalizedString = str_replace( '’', '', $normalizedString );
-		$normalizedString = str_replace( '\'', '', $normalizedString );
+		$normalizedString = $this->getNormalizedString( $string );
+		$words = explode( ' ', $normalizedString );
+		$firstWord = array_shift( $words );
+
+		/* Strip off leading articles, which tend to throw off repeat detection */
+		$articles = ['a', 'an', 'the'];
+		if( in_array( $firstWord, $articles ) )
+		{
+			$normalizedString = implode( ' ', $words );
+		}
 
 		foreach( $this->headlines as $headline )
 		{
-			$normalizedHeadline = $headline;
-			$normalizedHeadline = String::strtolower( $normalizedHeadline );
-			$normalizedHeadline = str_replace( '‘', '', $normalizedHeadline );
-			$normalizedHeadline = str_replace( '’', '', $normalizedHeadline );
-			$normalizedHeadline = str_replace( '\'', '', $normalizedHeadline );
-
-			// echo "> {$normalizedHeadline}" . PHP_EOL;
+			$normalizedHeadline = $this->getNormalizedString( $headline );
 
 			if( substr_count( $normalizedHeadline, $normalizedString ) > 0 )
 			{
-				// echo ">>> Found '{$normalizedString}' in '{$normalizedHeadline}'" . PHP_EOL;
 				return true;
 			}
 		}
 
-		// echo "# {$normalizedString}" . PHP_EOL;
 		return false;
 	}
 }
