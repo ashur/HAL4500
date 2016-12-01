@@ -6,6 +6,7 @@ $pathApplicationVendor = $pathApplicationBase . '/vendor';
 /*
  * Initialize vendor autoloading
  */
+include_once( $pathApplicationVendor . '/cranberry/bot/autoload.php' );
 include_once( $pathApplicationVendor . '/cranberry/cli/autoload.php' );
 
 function registerNamespaceAutoloader( $namespace )

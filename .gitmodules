@@ -1,3 +1,6 @@
 [submodule "vendor/cranberry/cli"]
 	path = vendor/cranberry/cli
 	url = https://github.com/cranberry/cli.git
+[submodule "vendor/cranberry/bot"]
+	path = vendor/cranberry/bot
+	url = https://github.com/cranberry/bot.git
